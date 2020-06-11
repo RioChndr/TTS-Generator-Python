@@ -1,9 +1,12 @@
-from pandas import *
-words = [
-    'rio',
-    'iotio',
+from pandas import DataFrame
+import sys
 
-]
+fileName = "words.txt"
+
+with open(fileName) as f:
+    words = f.read().splitlines()
+
+
 VERTICAL = "vertical"
 HORIZONTAL = "horizontal"
 
@@ -23,22 +26,19 @@ def findPosition(word):
     verticalLength = len(matrix)
 
     for row in range(horizontalLength):
-        print("test row {}".format(row))
         isAvailable = checkRow(row, word)
         if(isAvailable != False):
             posStartWord = isAvailable
-            print('kata {} di horizontal dengan posisi {}'.format(
-                word, posStartWord))
-            return putToMatrix(word, posStartWord, HORIZONTAL)
+            putToMatrix(word, posStartWord, HORIZONTAL)
+            return [True, posStartWord]
 
     for column in range(verticalLength):
-        print("test column {}".format(column))
         isAvailable = checkColumn(column, word)
         if(isAvailable != False):
             posStartWord = isAvailable
-            print('kata {} di horizontal dengan posisi {}'.format(
-                word, posStartWord))
-            return putToMatrix(word, posStartWord, VERTICAL)
+            putToMatrix(word, posStartWord, VERTICAL)
+            return [True, posStartWord]
+    return [False, None]
 
 
 def checkRow(row, word):
@@ -46,26 +46,11 @@ def checkRow(row, word):
     if isOutIndex(y=row) == True:
         return False
     for colMatrix in range(len(matrix[row])):
-        countNotPossible = 0
-        countThroughChar = 0
-        colMatrixTemp = colMatrix
-
-        for char in word:
-            isOut = isOutIndex(row, colMatrixTemp)
-            if(isOut):
-                continue
-            charMatrix = matrix[row][colMatrixTemp]
-            if(charMatrix != char and charMatrix != ''):
-                if len(charBefore) == 0:
-                countNotPossible += 1
-            if(charMatrix == char):
-                countThroughChar += 1
-
-            colMatrixTemp += 1
-        print("kata {}, CNP = {}, CTC = {}".format(
-            word, countNotPossible, countThroughChar))
-        if(countNotPossible == 0 and countThroughChar > 0):
+        isFit = isFitForWord(
+            word, lambda iteration: [row, colMatrix + iteration])
+        if isFit:
             return [row, colMatrix]
+
     return False
 
 
@@ -74,23 +59,60 @@ def checkColumn(column, word):
     if isOutIndex(x=column) == True:
         return False
     for rowMatrix in range(len(matrix)):
-        countNotPossible = 0
-        countThroughChar = 0
-        rowMatrixTemp = rowMatrix
-        for char in word:
-            isOut = isOutIndex(rowMatrixTemp, column)
-            if(isOut):
-                continue
-            charMatrix = matrix[rowMatrixTemp][column]
-            if(charMatrix != char and charMatrix != ''):
-                countNotPossible += 1
-            if(charMatrix == char):
-                countThroughChar += 1
-
-            rowMatrixTemp += 1
-        if(countNotPossible == 0 and countThroughChar > 0):
+        isFit = isFitForWord(
+            word, lambda iteration: [rowMatrix + iteration, column])
+        if isFit:
             return [rowMatrix, column]
+
     return False
+
+
+def isFitForWord(word, getChar):
+    global matrix
+    countNotPossible = 0
+    countThroughChar = 0
+    iterationWord = 0
+
+    # Check if nothing before startPoint
+    charBeforeRow, charBeforeCol = getChar(iterationWord - 1)
+    if(isOutIndex(charBeforeRow, charBeforeCol) == False):
+        charBefore = matrix[charBeforeRow][charBeforeCol]
+        if(charBefore != ''):
+            return False
+
+    # And check if nothing after word
+    charAfter = {'row': 0, 'col': 0}
+    charAfter['row'], charAfter['col'] = getChar(len(word))
+    if(isOutIndex(charAfter['row'], charAfter['col']) == False):
+        charAfterText = matrix[charAfter['row']][charAfter['col']]
+        if(charAfterText != ''):
+            return False
+
+    # Check if the word fit to the matrix from start point
+    for char in word:
+        charPosRow, charPosCol = getChar(iterationWord)
+        iterationWord += 1
+        if(isOutIndex(charPosRow, charPosCol)):
+            continue
+
+        charMatrix = matrix[charPosRow][charPosCol]
+        if(charMatrix != char and charMatrix != ''):
+            countNotPossible += 1
+        if(charMatrix == char):
+
+            countThroughChar += 1
+
+    if(countNotPossible == 0 and countThroughChar > 0):
+        return True
+    return False
+
+
+def getCell(row, col):
+    global matrix
+    if(isOutIndex(row, col) == False):
+        return matrix[row][col]
+    else:
+        return ''
 
 
 def isOutIndex(x=0, y=0):
@@ -103,18 +125,11 @@ def isOutIndex(x=0, y=0):
 
 
 def putToMatrix(word, wordStart, direction):
-    print("masukkan kata {} di posisi {} dengan arah {}".format(
-        word, wordStart, direction))
     global matrix
     posX = wordStart[0]
     posY = wordStart[1]
 
     for char in word:
-        if(isOutIndex(posX)):
-            matrix.append([])
-        if(isOutIndex(posX, posY)):
-            matrix[posX].append('')
-        print("{}, {}".format(posX, posY))
         matrix[posX][posY] = char
 
         if(direction == HORIZONTAL):
@@ -142,17 +157,35 @@ def generateEmptyMatrix(width, height):
 
 if __name__ == "__main__":
     wordInserted = []
+    if len(sys.argv) <= 1:
+        print("Masukkan lebar dan panjang kotak TTS")
+        print("     contoh : python crossWord.py 10 10")
+        print("     untuk lebar 10 dan panjang 10")
+        exit()
+    inputWidth = sys.argv[1]
+    inputHeight = sys.argv[2]
 
-    generateEmptyMatrix(10, 10)
+    generateEmptyMatrix(int(inputWidth), int(inputHeight))
 
-    # Run First
+    wordImported = {}
+    wordNotImported = []
     isFirst = True
     for word in words:
         if isFirst:
+            # Put first word to matrix
             putToMatrix(word, [0, 0], HORIZONTAL)
             isFirst = False
             continue
-        print("coba kata {}".format(word))
-        findPosition(word)
+        ok, positionWord = findPosition(word)
+        if ok:
+            wordImported[word] = positionWord
+        else:
+            wordNotImported.append(word)
 
     print(DataFrame(matrix))
+    print("Sebanyak {} kata dimasukkan, yaitu :".format(len(wordImported)))
+    print(wordImported)
+    if len(wordNotImported) > 0:
+        print("Sebanyak {} kata yang tidak dimasukkan yaitu :".format(
+            len(wordNotImported)))
+        print(wordNotImported)
